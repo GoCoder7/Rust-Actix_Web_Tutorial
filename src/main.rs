@@ -1,35 +1,24 @@
 use std::sync::Mutex;
 
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-
-struct AppStateWithCounter {
-    count: Mutex<i32>,
-}
-
-#[get("/")]
-async fn index(data: web::Data<AppStateWithCounter>) -> impl Responder {
-    let mut count = data.count.lock().unwrap();
-    *count += 1;
-    format!("Request number: {count}")
-}
+use actix_web::{get, guard, post, web, App, HttpResponse, HttpServer, Responder};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let data = web::Data::new(AppStateWithCounter {
-        count: Mutex::new(0),
-    });
-    HttpServer::new(move || {
+    HttpServer::new(|| {
         App::new()
-        .app_data(data.clone())
-        .service(index)
-        .service(
-            web::scope("sub")
-            .app_data(data.clone())
-            .service(index)
-        )
+            .service(
+                web::scope("/")
+                    .guard(guard::Host("www.rust-lang.org"))
+                    .route("", web::to(|| async { HttpResponse::Ok().body("www") })),
+            )
+            .service(
+                web::scope("/")
+                    .guard(guard::Host("users.rust-lang.org"))
+                    .route("", web::to(|| async { HttpResponse::Ok().body("users") })),
+            )
+            .route("/", web::to(|| async { HttpResponse::Ok().body("default") }))
     })
     .bind(("127.0.0.1", 8080))?
-    // .workers(1)
     .run()
     .await
 }
